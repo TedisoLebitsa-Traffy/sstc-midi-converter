@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import pretty_midi
 from gradio.processing_utils import save_file_to_cache
 
+from audition import write_preview
 from music import (REFERENCE_BPM, midi_notes, monophonic, note_events,
                    prepare_notes, write_melody, write_midi)
 from transcription import MAX_MB, decode_audio, media_command, transcribe
@@ -59,7 +60,7 @@ def piano_roll(notes=(), length_ms=10000):
 
 
 
-NO_RESULTS = (piano_roll(), [], None, None, None, None)
+NO_RESULTS = (piano_roll(), [], None, None, None, None, None)
 
 
 def stage_upload(upload, previous, progress=gr.Progress()):
@@ -114,8 +115,9 @@ def convert(recording, bpm, transpose, minimum_ms, mono, progress=gr.Progress())
     try:
         progress(0.78, desc="Applying note and tempo settings")
         bpm, transpose, minimum_ms = int(bpm), int(transpose), int(minimum_ms)
-        notes = prepare_notes(recording["events"], bpm, transpose, minimum_ms)
-        notes = monophonic(notes, minimum_ms) if mono else midi_notes(notes, minimum_ms)
+        extracted = prepare_notes(recording["events"], bpm, transpose, minimum_ms)
+        melody = monophonic(extracted, minimum_ms)
+        notes = melody if mono else midi_notes(extracted, minimum_ms)
         if not notes:
             return recording, "No notes match these settings. Try a lower minimum duration or a clearer recording.", *NO_RESULTS
         end_ms = round(recording["seconds"] * 1000 * REFERENCE_BPM / bpm)
@@ -123,7 +125,13 @@ def convert(recording, bpm, transpose, minimum_ms, mono, progress=gr.Progress())
         with TemporaryDirectory(prefix="sstc-export-") as folder:
             midi = Path(folder) / "transcription.mid"
             write_midi(notes, bpm, midi)
-            offline = write_melody(note_events(notes, end_ms), folder) if mono else (None,) * 3
+            events = note_events(melody, end_ms)
+            offline = write_melody(events, folder) if mono else (None,) * 3
+            preview = None
+            if melody:
+                preview_path = Path(folder) / "melody-preview.wav"
+                write_preview(events, preview_path)
+                preview = save_file_to_cache(preview_path, CACHE)
             downloads = [save_file_to_cache(path, CACHE) if path else None for path in (midi, *offline)]
         rows = [
             [pretty_midi.note_number_to_name(n.pitch), n.pitch, n.frequency_hz,
@@ -133,7 +141,7 @@ def convert(recording, bpm, transpose, minimum_ms, mono, progress=gr.Progress())
         kind = "monophonic" if mono else "polyphonic"
         progress(1, desc="Downloads ready")
         return (recording, f"{len(notes):,} {'note' if len(notes) == 1 else 'notes'} · {kind} · {bpm} BPM",
-                piano_roll(notes, max(end_ms, max(n.end_ms for n in notes))), rows, *downloads)
+                piano_roll(notes, max(end_ms, max(n.end_ms for n in notes))), rows, *downloads, preview)
     except (ValueError, TypeError, OverflowError):
         return recording, "Check the tempo, transposition and duration settings.", *NO_RESULTS
     except Exception:
@@ -203,6 +211,12 @@ with gr.Blocks(title="SSTC MIDI Converter", theme=THEME, css=CSS,
                 gr.Markdown("## Piano roll")
                 status = gr.Markdown("Choose a recording to start.", elem_id="status")
             plot = gr.Plot(value=piano_roll(), show_label=False, elem_id="piano-roll")
+            playback = gr.Audio(label="Tesla coil-style preview", interactive=False,
+                                show_download_button=False, elem_id="melody-playback",
+                                waveform_options=gr.WaveformOptions(
+                                    waveform_color="#626d65", waveform_progress_color="#edfc83"))
+            gr.Markdown("Plays a synthesized monophonic melody. Actual coil sound varies.",
+                        elem_classes="muted")
             with gr.Tabs():
                 with gr.Tab("Extracted notes"):
                     table = gr.Dataframe(headers=HEADERS, datatype=["str"] + ["number"] * 4,
@@ -216,7 +230,7 @@ with gr.Blocks(title="SSTC MIDI Converter", theme=THEME, css=CSS,
                         header_file = gr.File(label="C++ header")
     gr.Markdown("Automatic transcription is approximate. Dense mixes and overlapping instruments may need manual correction.",
                 elem_classes="footer")
-    results = [status, plot, table, midi_file, json_file, csv_file, header_file]
+    results = [status, plot, table, midi_file, json_file, csv_file, header_file, playback]
     upload.upload(stage_upload, [upload, recording], [upload, preview, recording, *results],
                   concurrency_id="audio", api_name="prepare_audio")
     run.click(convert, [recording, bpm, transpose, minimum, mono], [recording, *results],

@@ -33,9 +33,9 @@ Open [http://127.0.0.1:7860](http://127.0.0.1:7860). Basic Pitch loads its bundl
 1. Upload an MP3, WAV, FLAC or M4A file up to 40 MiB and 3 minutes. Play the normalized mono preview to check the input.
 2. Set tempo, transpose and minimum note duration. At 120 BPM, the original timing is preserved. At 60 BPM, all note starts, durations and rests are doubled. Tempo is a playback setting referenced to 120 BPM.
 3. Enable **Monophonic Melody** for one note at a time. The converter picks the strongest active note and uses higher pitch to break ties. It drops fragments below the minimum duration.
-4. Select **Convert to MIDI**. Inspect the piano roll and extracted notes. Select **Downloads** for MIDI and, in monophonic mode, JSON, CSV and the C++ header. Change the settings and convert again to reuse the existing transcription.
+4. Select **Convert to MIDI**. Inspect the piano roll and extracted notes. Press play on **Tesla coil-style preview** to hear a buzzy, synthesized rendition of the edited monophonic melody, including its rests. The preview is available with polyphonic MIDI too, and real coil acoustics may differ. Select **Downloads** for MIDI and, in monophonic mode, JSON, CSV and the C++ header. Change the settings and convert again to reuse the existing transcription.
 
-Frequency uses 12-tone equal temperament with A4 at 440 Hz. Timing is rounded to milliseconds before export. The upload is deleted after decoding, and the decoded audio is removed after transcription or session cleanup. A temporary MP3 preview and generated downloads are retained in the Gradio cache for roughly an hour. Download anything you want to keep before closing the session.
+Frequency uses 12-tone equal temperament with A4 at 440 Hz. Timing is rounded to milliseconds before export. The upload is deleted after decoding, and the decoded audio is removed after transcription or session cleanup. Temporary audio previews and generated downloads are retained in the Gradio cache for roughly an hour. Download anything you want to keep before closing the session.
 
 ## Example
 
@@ -69,7 +69,7 @@ Automatic transcription is approximate. Clean, pitched recordings work best. Den
 
 1. Sign into Hugging Face and [create a Space](https://huggingface.co/new-space). Choose **Gradio**, **Public** and CPU hardware.
 2. Create a Hugging Face write token with access to that Space. On GitHub, open **Settings → Secrets and variables → Actions**. Add the repository secret `HF_TOKEN` and the repository variable `HF_SPACE_ID` with the value `owner/space-name`.
-3. Under **Actions**, run **Deploy to Hugging Face Spaces** on the branch you want to publish. The workflow sends only the application files. Alternatively, upload `README.md`, `app.py`, `music.py`, `transcription.py`, `style.css`, `requirements.txt` and `packages.txt` under the Space’s **Files** tab. The README metadata configures Python and Gradio, and `packages.txt` installs FFmpeg.
+3. Under **Actions**, run **Deploy to Hugging Face Spaces** on the branch you want to publish. The workflow sends only the application files. Alternatively, upload `README.md`, `app.py`, `audition.py`, `music.py`, `transcription.py`, `style.css`, `requirements.txt` and `packages.txt` under the Space’s **Files** tab. The README metadata configures Python and Gradio, and `packages.txt` installs FFmpeg.
 4. Wait for **Running** on the Space page. Open the app in a signed-out window to check public access, then upload a short clip and download its MIDI.
 
 ## Tests

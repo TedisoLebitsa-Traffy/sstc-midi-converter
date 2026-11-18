@@ -9,6 +9,7 @@ import numpy as np
 import pretty_midi
 import pytest
 
+from audition import SAMPLE_RATE as PREVIEW_RATE, write_preview
 from music import midi_notes, monophonic, note_events, prepare_notes, write_melody, write_midi
 from transcription import SAMPLE_RATE, decode_audio, transcribe
 
@@ -123,10 +124,29 @@ def test_app_stages_upload_and_cleans_raw_and_decoded_files(tmp_path, monkeypatc
     assert not upload.exists()
     staged = Path(recording["wav"])
     monkeypatch.setattr(app, "transcribe", lambda _: [(0.2, 0.5, 69, 0.8, None)])
-    saved, status, _, rows, midi, *offline = app.convert(recording, 120, 0, 70, True)
+    saved, status, _, rows, midi, *outputs = app.convert(recording, 120, 0, 70, True)
     assert "1 note" in status
     assert not staged.parent.exists()
     assert rows == [["A4", 69, 440.0, 0.2, 0.3]]
-    assert all(Path(path).is_file() for path in (midi, *offline))
+    assert all(Path(path).is_file() for path in (midi, *outputs))
     _, _, _, edited, *_ = app.convert(saved, 60, 3, 70, False)
     assert edited[0][:2] == ["C5", 72]
+
+
+def test_audition_preserves_rests_and_pitch(tmp_path):
+    events = [
+        dict(frequencyHz=0, durationMs=100, rest=True),
+        dict(frequencyHz=440, durationMs=250, rest=False),
+        dict(frequencyHz=0, durationMs=150, rest=True),
+    ]
+    preview = tmp_path / "preview.wav"
+    write_preview(events, preview)
+    with wave.open(str(preview), "rb") as audio:
+        assert audio.getframerate() == PREVIEW_RATE
+        samples = np.frombuffer(audio.readframes(audio.getnframes()), dtype="<i2")
+    assert len(samples) == PREVIEW_RATE // 2
+    assert not samples[:2400].any()
+    assert not samples[8400:].any()
+    tone = samples[2400:8400]
+    frequencies = np.fft.rfftfreq(len(tone), 1 / PREVIEW_RATE)
+    assert frequencies[np.argmax(abs(np.fft.rfft(tone)))] == 440

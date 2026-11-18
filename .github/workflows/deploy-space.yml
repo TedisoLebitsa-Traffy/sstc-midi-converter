@@ -38,7 +38,7 @@ jobs:
           api.upload_folder(
               repo_id=space_id, repo_type="space", folder_path=".",
               allow_patterns=[
-                  "README.md", "app.py", "music.py", "transcription.py",
+                  "README.md", "app.py", "audition.py", "music.py", "transcription.py",
                   "requirements.txt", "packages.txt", "style.css",
               ],
               commit_message=f"Deploy GitHub commit {os.environ['GITHUB_SHA']}",
