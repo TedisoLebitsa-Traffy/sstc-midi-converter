@@ -84,12 +84,17 @@ def stage_upload(upload, previous, progress=gr.Progress()):
         )
     except Exception as error:
         shutil.rmtree(stage, ignore_errors=True)
+        if isinstance(error, FileNotFoundError):
+            error = ValueError("The upload is no longer available. Select the recording again.")
         if not isinstance(error, (ValueError, RuntimeError)):
             LOGGER.exception("Audio preparation failed")
             error = ValueError("Audio preparation failed. Try uploading the recording again.")
         return None, None, None, str(error), *NO_RESULTS
     finally:
-        source.unlink(missing_ok=True)
+        try:
+            source.unlink(missing_ok=True)
+        except OSError:
+            LOGGER.warning("Upload cleanup deferred to the Gradio cache sweeper.")
 
 
 def convert(recording, bpm, transpose, minimum_ms, mono, progress=gr.Progress()):
@@ -110,7 +115,7 @@ def convert(recording, bpm, transpose, minimum_ms, mono, progress=gr.Progress())
         progress(0.78, desc="Applying note and tempo settings")
         bpm, transpose, minimum_ms = int(bpm), int(transpose), int(minimum_ms)
         notes = prepare_notes(recording["events"], bpm, transpose, minimum_ms)
-        notes = monophonic(notes, minimum_ms) if mono else midi_notes(notes)
+        notes = monophonic(notes, minimum_ms) if mono else midi_notes(notes, minimum_ms)
         if not notes:
             return recording, "No notes match these settings. Try a lower minimum duration or a clearer recording.", *NO_RESULTS
         end_ms = round(recording["seconds"] * 1000 * REFERENCE_BPM / bpm)

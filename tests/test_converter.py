@@ -75,6 +75,7 @@ def test_transpose_tempo_and_polyphony(tmp_path):
                            (0.4, 0.9, 64, 0.3, None), (0, 0.01, 70, 1, None),
                            (0, 1, 127, 1, None)], 60, 2, 40)
     rendered = midi_notes(notes)
+    assert all(n.duration_ms >= 500 for n in midi_notes(notes, 500))
     assert [(n.pitch, n.start_ms, n.end_ms) for n in rendered] == [
         (62, 400, 800), (62, 800, 1800), (66, 800, 1800)]
     midi_path = tmp_path / "edited.mid"

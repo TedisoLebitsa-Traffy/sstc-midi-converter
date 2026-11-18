@@ -68,7 +68,7 @@ def monophonic(notes, minimum_ms=0):
     return [note for _, note in segments if note.duration_ms >= max(1, minimum_ms)]
 
 
-def midi_notes(notes):
+def midi_notes(notes, minimum_ms=0):
     """Keep one active event per pitch so identical pitches can retrigger safely."""
     by_pitch = {}
     for note in notes:
@@ -81,7 +81,8 @@ def midi_notes(notes):
         if track and note.start_ms < track[-1].end_ms:
             track[-1] = replace(track[-1], end_ms=note.start_ms)
         track.append(note)
-    return sorted((note for track in by_pitch.values() for note in track),
+    return sorted((note for track in by_pitch.values() for note in track
+                   if note.duration_ms >= max(1, minimum_ms)),
                   key=lambda note: (note.start_ms, note.pitch))
 
 
