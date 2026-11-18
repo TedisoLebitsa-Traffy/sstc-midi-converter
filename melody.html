@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Melody to MIDI</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101314;color:#f0f3ec;font:16px/1.5 system-ui,sans-serif;color-scheme:dark}main{max-width:780px;margin:auto;padding:44px 18px}h1{font-size:clamp(2.5rem,8vw,4.5rem);margin:0;line-height:1.05;letter-spacing:-.06em}h1 em{color:#edfc83;font-style:normal}p{color:#bcc5bf}section,details{margin-top:22px;padding:20px;border:1px solid #394243;border-radius:16px;background:#181d1e}label{display:block;font-weight:650}textarea,input{font:inherit;color:inherit;background:#101314;border:1px solid #52605d;border-radius:8px;padding:10px}textarea{display:block;width:100%;min-height:145px;font:15px/1.65 ui-monospace,monospace;resize:vertical;margin-top:8px}input{width:100px}button{font:inherit;font-weight:650;color:inherit;background:#282f2e;border:1px solid #52605d;padding:9px 14px;border-radius:8px;cursor:pointer}button.primary{color:#152009;background:#edfc83;border-color:#edfc83}button:disabled{opacity:.55;cursor:default}.row{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin-top:15px}.tempo{margin-left:auto}#status{margin-bottom:0;min-height:1.5em}.error{color:#ffaaa0}summary{cursor:pointer;font-weight:650}small{color:#bcc5bf}code{color:#edfc83}
+</style>
+<main>
+<h1>Melody to <em>MIDI</em></h1>
+<p>Paste a melody, hear it, then download MIDI or an ESP32 LED-test sketch.</p>
+<section>
+<label for="song">Song notes</label>
+<small>Use <code>C4:1 D4:0.5 R:0.5 E4:2</code> for note:beats, with <code>R</code> for a rest. You can also paste the Happy Birthday Arduino sketch or its <code>{"G4", 1}</code> song list.</small>
+<textarea id="song" maxlength="100000" spellcheck="false">G4:0.5 G4:0.5 A4:1 G4:1 C5:1 B4:2
+G4:0.5 G4:0.5 A4:1 G4:1 D5:1 C5:2
+G4:0.5 G4:0.5 G5:1 E5:1 C5:1 B4:1 A4:2
+F5:0.5 F5:0.5 E5:1 C5:1 D5:1 C5:2</textarea>
+<div class="row">
+<button class="primary" id="play">Play</button>
+<button id="stop" disabled>Stop</button>
+<button id="midi">Download MIDI</button>
+<div class="tempo"><label for="bpm">Tempo (BPM)</label><input id="bpm" type="number" value="125" min="30" max="300" step="1"></div>
+</div>
+<p id="status" role="status"></p>
+</section>
+<details>
+<summary>ESP32 LED-test sketch</summary>
+<p>For a classic ESP32-WROOM-32 DevKit, connect GPIO 25 through a 330 Ω resistor to the LED’s long leg, and the short leg to GND. Keep the coil disconnected. The LED shows the rhythm, and the Serial Monitor at 115200 baud shows the notes.</p>
+<div class="row"><button id="generate">Generate sketch</button><button id="copy">Copy</button><button id="ino">Download sketch</button></div>
+<label for="sketch" style="margin-top:10px">Arduino code</label>
+<textarea id="sketch" readonly spellcheck="false"></textarea>
+</details>
+</main>
+<script>
+"use strict";
+const PPQ = 480;
+const pitches = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+const byId = id => document.getElementById(id);
+
+function parseSong(text) {
+  if (text.length > 100000) throw Error("The pasted song is too long.");
+  const pairs = [...text.matchAll(/\{\s*"([A-Ga-g][#b]?-?\d+|R)"\s*,\s*(\d+)\s*\}/g)];
+  const tokens = pairs.length ? pairs.map(([, note, count]) => note + ":" + count / 2)
+    : text.trim().split(/[\s,|]+/).filter(Boolean);
+  if (!tokens.length) throw Error("Paste a song or enter notes first.");
+  if (tokens.length > 1500) throw Error("Use up to 1,500 notes and rests.");
+  return tokens.map((token, index) => {
+    const m = /^(R|[A-G][#b]?-?\d+)(?::(\d+(?:\.\d+)?))?$/i.exec(token);
+    if (!m) throw Error("Entry " + (index + 1) + " needs a note such as C4:1 or a rest such as R:0.5.");
+    const name = m[1][0].toUpperCase() + m[1].slice(1);
+    const beats = Number(m[2] ?? 1);
+    if (beats < .025 || beats > 64) throw Error("Each duration must be between 0.025 and 64 beats.");
+    const [, letter, accidental, octave] = /^([A-G])([#b]?)(-?\d+)$/i.exec(name) ?? [];
+    const pitch = name === "R" ? null : (Number(octave) + 1) * 12 + pitches[letter] + (accidental === "#" ? 1 : accidental ? -1 : 0);
+    if (pitch !== null && (!Number.isInteger(pitch) || pitch < 0 || pitch > 127)) throw Error("Note " + name + " is outside MIDI's pitch range.");
+    return {name, pitch, ticks: Math.round(beats * PPQ)};
+  });
+}
+
+function vlq(number) {
+  const bytes = [number & 127];
+  for (number >>>= 7; number; number >>>= 7) bytes.unshift((number & 127) | 128);
+  return bytes;
+}
+
+function midiBytes(notes, bpm) {
+  const tempo = Math.round(60000000 / bpm);
+  const track = [0,255,81,3,tempo >> 16,(tempo >> 8) & 255,tempo & 255];
+  let wait = 0;
+  for (const {pitch, ticks} of notes) {
+    if (pitch === null) { wait += ticks; continue; }
+    track.push(...vlq(wait),144,pitch,90,...vlq(ticks),128,pitch,0);
+    wait = 0;
+  }
+  track.push(...vlq(wait),255,47,0);
+  const length = track.length;
+  return Uint8Array.from([77,84,104,100,0,0,0,6,0,0,0,1,1,224,
+    77,84,114,107,length >>> 24,(length >>> 16) & 255,(length >>> 8) & 255,length & 255,...track]);
+}
+
+function ledSketch(notes, bpm) {
+  const milliseconds = ticks => Math.round(ticks * 60000 / (bpm * PPQ));
+  let start = 0;
+  const lines = notes.map(({name, pitch, ticks}) => {
+    const duration = milliseconds(start + ticks) - milliseconds(start);
+    start += ticks;
+    return '  {"' + name + '", ' + duration + ', ' + (pitch === null ? 'true' : 'false') + '},';
+  });
+  return [
+    "// LED rhythm test. Keep the coil disconnected.",
+    "constexpr int LED_PIN = 25;",
+    "struct Event { const char* name; unsigned long ms; bool rest; };",
+    "const Event song[] = {", ...lines, "};", "",
+    "void setup() {", "  pinMode(LED_PIN, OUTPUT);", "  digitalWrite(LED_PIN, LOW);", "  Serial.begin(115200);", "}", "",
+    "void loop() {", "  for (const auto& note : song) {",
+    "    Serial.println(note.name);", "    const auto onMs = note.rest ? 0UL : note.ms * 4 / 5;",
+    "    if (onMs) {", "      digitalWrite(LED_PIN, HIGH);", "      delay(onMs);", "    }",
+    "    digitalWrite(LED_PIN, LOW);", "    delay(note.ms - onMs);", "  }",
+    "  delay(2000);", "}", ""
+  ].join("\n");
+}
+
+function read() {
+  const bpm = Number(byId("bpm").value);
+  if (!Number.isInteger(bpm) || bpm < 30 || bpm > 300) throw Error("Enter a whole-number tempo from 30 to 300 BPM.");
+  const notes = parseSong(byId("song").value);
+  const seconds = notes.reduce((sum, note) => sum + note.ticks, 0) * 60 / (PPQ * bpm);
+  if (seconds > 600) throw Error("Keep the melody under 10 minutes.");
+  if (notes.every(note => note.pitch === null)) throw Error("Add at least one pitched note.");
+  return {notes, bpm, seconds};
+}
+
+function status(message, error = false) {
+  byId("status").textContent = message;
+  byId("status").classList.toggle("error", error);
+}
+
+function download(data, filename, type) {
+  const url = URL.createObjectURL(new Blob([data], {type}));
+  const link = document.createElement("a");
+  link.href = url; link.download = filename;
+  document.body.append(link);
+  link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+let playback;
+function stop() {
+  if (playback) {
+    clearTimeout(playback.timer);
+    playback.context.close();
+    playback = undefined;
+  }
+  byId("play").disabled = false;
+  byId("stop").disabled = true;
+}
+
+async function play() {
+  const {notes, bpm, seconds} = read();
+  const Audio = window.AudioContext || window.webkitAudioContext;
+  if (!Audio) throw Error("This browser cannot play the preview. MIDI download is still available.");
+  const context = new Audio();
+  playback = {context};
+  byId("play").disabled = true;
+  byId("stop").disabled = false;
+  try {
+    await context.resume();
+    if (playback?.context !== context) return;
+    let time = context.currentTime + .04;
+    for (const {pitch, ticks} of notes) {
+      const duration = ticks * 60 / (PPQ * bpm);
+      if (pitch !== null) {
+        const oscillator = context.createOscillator(), gain = context.createGain();
+        oscillator.type = "triangle";
+        oscillator.frequency.value = 440 * 2 ** ((pitch - 69) / 12);
+        oscillator.connect(gain).connect(context.destination);
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(.18, time + Math.min(.012, duration / 4));
+        gain.gain.setValueAtTime(.18, time + duration * .8);
+        gain.gain.linearRampToValueAtTime(0, time + duration * .96);
+        oscillator.start(time); oscillator.stop(time + duration);
+      }
+      time += duration;
+    }
+    status("Playing melody · " + seconds.toFixed(1) + " s");
+    playback.timer = setTimeout(() => { stop(); status("Playback complete."); }, (seconds + .08) * 1000);
+  } catch (error) {
+    if (playback?.context === context) { stop(); throw error; }
+  }
+}
+
+function generate() {
+  const {notes,bpm} = read();
+  const sketch = ledSketch(notes,bpm);
+  byId("sketch").value = sketch;
+  return sketch;
+}
+
+function action(id, handler) {
+  byId(id).addEventListener("click", async () => {
+    try { await handler(); } catch (error) { status(error.message, true); }
+  });
+}
+
+action("play", play);
+action("stop", () => { stop(); status("Playback stopped."); });
+action("midi", () => {
+  const {notes,bpm} = read();
+  download(midiBytes(notes,bpm), "melody.mid", "audio/midi");
+  status("MIDI download started.");
+});
+action("generate", () => { generate(); status("Sketch generated."); });
+action("ino", () => { download(generate(), "melody.ino", "text/plain"); status("Sketch download started."); });
+action("copy", async () => {
+  const sketch = generate();
+  try {
+    await navigator.clipboard.writeText(sketch);
+    status("Sketch copied.");
+  } catch {
+    byId("sketch").focus(); byId("sketch").select();
+    status("Sketch selected. Press Ctrl+C or Cmd+C to copy.");
+  }
+});
+for (const id of ["song", "bpm"]) byId(id).addEventListener("input", () => {
+  stop(); byId("sketch").value = ""; status("");
+});
+</script>
+</html>

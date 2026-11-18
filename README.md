@@ -15,6 +15,10 @@ short_description: Transcribe recordings to MIDI and offline melody data
 
 Upload a recording, inspect the notes in a piano roll, and download MIDI. Monophonic Melody mode also exports JSON, CSV and a C++ header with musical timing for offline ESP32 development.
 
+## Paste a melody
+
+Open [melody.html](melody.html) in a browser for the standalone note editor. It plays the melody and exports MIDI and an ESP32 LED-test sketch. It works offline after downloading the HTML file.
+
 ## Run locally
 
 Use Python 3.11 and install FFmpeg with `ffmpeg` and `ffprobe` on your PATH. On Debian or Ubuntu, install `ffmpeg` with your package manager. On macOS, use `brew install ffmpeg`. On Windows, WSL provides the Linux setup tested by this project.
