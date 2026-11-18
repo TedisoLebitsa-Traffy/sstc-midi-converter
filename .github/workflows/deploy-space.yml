@@ -1,0 +1,46 @@
+name: Deploy to Hugging Face Spaces
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-hugging-face-space
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install huggingface-hub==0.35.3
+      - name: Upload application files
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          space_id = os.environ["HF_SPACE_ID"]
+          token = os.environ["HF_TOKEN"]
+          if not space_id or not token:
+              raise SystemExit("Set HF_SPACE_ID and HF_TOKEN in GitHub Actions settings.")
+          api = HfApi(token=token)
+          api.space_info(space_id)
+          api.upload_folder(
+              repo_id=space_id, repo_type="space", folder_path=".",
+              allow_patterns=[
+                  "README.md", "app.py", "music.py", "transcription.py",
+                  "requirements.txt", "packages.txt", "style.css",
+              ],
+              commit_message=f"Deploy GitHub commit {os.environ['GITHUB_SHA']}",
+          )
+          PY

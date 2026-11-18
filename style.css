@@ -1,0 +1,40 @@
+:root { color-scheme: dark; }
+body, gradio-app { background: #101314 !important; }
+.gradio-container { width: 100% !important; min-width: 0 !important; max-width: 1240px !important; box-sizing: border-box !important; margin: auto !important; padding: 0 28px 24px !important; }
+footer { display: none !important; }
+.masthead { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 23px 0; border-bottom: 1px solid #30383a; color: #f0f3ec; }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 690; }
+.brand-icon { width: 36px; height: 36px; border-radius: 9px; background: #edfc83; display: flex;
+  gap: 2px; align-items: center; justify-content: center; }
+.brand-icon i { width: 2px; background: #1b2413; height: 7px; border-radius: 2px; }
+.brand-icon i:nth-child(2), .brand-icon i:nth-child(4) { height: 14px; }
+.brand-icon i:nth-child(3) { height: 21px; }
+.limit { color: #b8c1bd; font: 11px ui-monospace, monospace; white-space: nowrap; }
+.intro { padding: 31px 0 22px; }
+.intro h1 { margin: 0; color: #f0f3ec; font-size: clamp(38px, 6.0vw, 78px);
+  line-height: 1.02; font-weight: 710; letter-spacing: -.065em; }
+.intro h1 em { color: #edfc83; font-style: normal; }
+.intro p { color: #b8c1bd; margin: 17px 0 0; font-size: 15px; max-width: 520px; }
+#workspace { gap: 18px; align-items: flex-start; }
+.converter-panel { padding: 20px; background: #161a1c; border: 1px solid #30383a; border-radius: 16px; }
+.converter-panel h2 { font-size: 19px !important; font-weight: 680 !important; letter-spacing: -.03em; }
+#audio-upload { border: 1px dashed #52604c; border-radius: 12px; }
+.muted p, .footer p, #status p { color: #b8c1bd !important; font-size: 12px; }
+.section-heading { margin-top: 9px; padding-top: 14px; border-top: 1px solid #30383a; }
+#convert { min-height: 46px; border-radius: 10px; font-weight: 700; }
+.result-heading { align-items: baseline; }
+#status { text-align: right; }
+#piano-roll { min-height: 330px; }
+.footer { margin-top: 5px; }
+@media (max-width: 700px) {
+  .gradio-container { padding: 0 14px 18px !important; }
+  .masthead { padding: 16px 0; }
+  .brand { font-size: 13px; gap: 8px; }
+  .limit { font-size: 10px; }
+  .intro { padding: 22px 0 16px; }
+  #workspace > .converter-panel { min-width: 0 !important; flex-basis: 100% !important; padding: 14px; }
+}
+
+#piano-roll .modebar-btn path { fill: #96a29a; }
+#piano-roll .modebar-btn:hover path { fill: #edfc83; }
